@@ -34,9 +34,17 @@
 
 #include <math.h>
 
+void action_get_max_etat( const intptr_t element, void* data ){
+	int * max = (int*) data;
+	if( *max <= element ) *max = element;
+}
 
 int get_max_etat( const Automate* automate ){
-	A_FAIRE_RETURN( 0 );
+	int max = INT_MIN;
+
+	pour_tout_element( automate->etats, action_get_max_etat, &max );
+
+	return max;
 }
 
 void action_get_min_etat( const intptr_t element, void* data ){
@@ -489,8 +497,27 @@ Automate *automate_accessible( const Automate * automate ){
 	A_FAIRE_RETURN( NULL ); 
 }
 
+void inverser_transition( int origine, char lettre, int fin, void* data ){
+	Automate * automate = (Automate *) data;
+	ajouter_transition(automate, fin, lettre, origine);
+}
+
+void inverser_initiaux( const intptr_t element, void* data ){
+	Automate * automate = (Automate *) data;
+	ajouter_etat_final (automate, (int)element);
+}
+
+void inverser_finaux( const intptr_t element, void* data ){
+	Automate * automate = (Automate *) data;
+	ajouter_etat_initial (automate, (int)element);
+}
+
 Automate *miroir( const Automate * automate){
-	A_FAIRE_RETURN( NULL ); 
+	Automate * automate_miroir = creer_automate();
+	pour_toute_transition(automate, inverser_transition, automate_miroir);
+	pour_tout_element(get_initiaux(automate), inverser_initiaux, automate_miroir);
+	pour_tout_element(get_finaux(automate), inverser_finaux, automate_miroir);
+	return automate_miroir;
 }
 
 Automate * creer_automate_du_melange(
