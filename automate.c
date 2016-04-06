@@ -485,8 +485,30 @@ Automate * creer_union_des_automates(
 	A_FAIRE_RETURN( NULL );
 }
 
+
 Ensemble* etats_accessibles( const Automate * automate, int etat ){
-	A_FAIRE_RETURN( NULL ); 
+	Ensemble * e = creer_ensemble( NULL, NULL, NULL );
+	Ensemble * suivants;
+	Ensemble_iterateur it;
+	for(
+		it = premier_iterateur_ensemble( get_alphabet(automate) );
+		! iterateur_ensemble_est_vide( it );
+		it = iterateur_suivant_ensemble( it )
+	){
+		suivants = delta1(automate, etat, get_element(it));
+		Ensemble_iterateur svt;
+		for(
+			svt = premier_iterateur_ensemble( suivants );
+			! iterateur_ensemble_est_vide( svt );
+			svt = iterateur_suivant_ensemble( svt )
+		){
+			if(!est_dans_l_ensemble(e, get_element(svt))){
+				ajouter_element(e, get_element(svt));
+				ajouter_elements(e, etats_accessibles(automate, get_element(svt)));
+			}
+		}
+	}
+	return e;
 }
 
 Ensemble* accessibles( const Automate * automate ){
