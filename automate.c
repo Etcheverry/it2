@@ -479,10 +479,44 @@ Automate * mot_to_automate( const char * mot ){
 	return automate;
 }
 
+void union_ajouter_etat( const intptr_t element, void* data ){
+	Automate * res = (Automate*) data;
+	ajouter_etat(res, element);
+}
+
+void union_ajouter_etat_initial( const intptr_t element, void* data ){
+	Automate * res = (Automate*) data;
+	ajouter_etat_initial(res, element);
+}
+
+void union_ajouter_etat_final( const intptr_t element, void* data ){
+	Automate * res = (Automate*) data;
+	ajouter_etat_final(res, element);
+}
+
+void union_ajouter_lettre( const intptr_t element, void* data ){
+	Automate * res = (Automate*) data;
+	ajouter_lettre(res, element);
+}
+
+void union_ajouter_transition( int origine, char lettre, int fin, void* data ){
+	Automate * res = (Automate *) data;
+	ajouter_transition(res, origine, lettre, fin);
+}
+
 Automate * creer_union_des_automates(
 	const Automate * automate_1, const Automate * automate_2
 ){
-	A_FAIRE_RETURN( NULL );
+	Automate * res = translater_automate(automate_1, automate_2);
+	
+	//On ajoute les caractéristiques de l'automate_2 à res
+	pour_tout_element(get_etats(automate_2), union_ajouter_etat, res);
+	pour_tout_element(get_initiaux(automate_2), union_ajouter_etat_initial, res);
+	pour_tout_element(get_finaux(automate_2), union_ajouter_etat_final, res);
+	pour_tout_element(get_alphabet(automate_2), union_ajouter_lettre, res);
+	pour_toute_transition(automate_2, union_ajouter_transition, res);
+	
+	return res;
 }
 
 
@@ -490,6 +524,7 @@ Ensemble* etats_accessibles( const Automate * automate, int etat ){
 	Ensemble * e = creer_ensemble( NULL, NULL, NULL );
 	Ensemble * suivants;
 	Ensemble_iterateur it;
+	ajouter_element(e, etat);
 	for(
 		it = premier_iterateur_ensemble( get_alphabet(automate) );
 		! iterateur_ensemble_est_vide( it );
@@ -508,15 +543,83 @@ Ensemble* etats_accessibles( const Automate * automate, int etat ){
 			}
 		}
 	}
+	liberer_ensemble(suivants);
 	return e;
 }
 
 Ensemble* accessibles( const Automate * automate ){
-	A_FAIRE_RETURN( NULL ); 
+	Ensemble * e = creer_ensemble(NULL, NULL, NULL);
+	Ensemble_iterateur it;
+	for(
+		it = premier_iterateur_ensemble( get_initiaux(automate) );
+		! iterateur_ensemble_est_vide( it );
+		it = iterateur_suivant_ensemble( it )
+	){
+		ajouter_elements(e, etats_accessibles(automate, get_element(it)));
+	}
+	return e;
 }
 
 Automate *automate_accessible( const Automate * automate ){
-	A_FAIRE_RETURN( NULL ); 
+	 Ensemble * acc = accessibles(automate);
+	 Automate * res = creer_automate();
+	 
+	 Ensemble_iterateur it1;
+	// On ajoute les états de l'automate
+	for(
+		it1 = premier_iterateur_ensemble( get_etats( automate ) );
+		! iterateur_ensemble_est_vide( it1 );
+		it1 = iterateur_suivant_ensemble( it1 )
+	){
+		if(est_dans_l_ensemble(acc, get_element(it1)))
+			ajouter_etat( res, get_element( it1 ) );
+	}
+	// On ajoute les états initiaux
+	for(
+		it1 = premier_iterateur_ensemble( get_initiaux( automate ) );
+		! iterateur_ensemble_est_vide( it1 );
+		it1 = iterateur_suivant_ensemble( it1 )
+	){
+		ajouter_etat_initial( res, get_element( it1 ) );
+	}
+	// On ajoute les états finaux
+	for(
+		it1 = premier_iterateur_ensemble( get_finaux( automate ) );
+		! iterateur_ensemble_est_vide( it1 );
+		it1 = iterateur_suivant_ensemble( it1 )
+	){
+		if(est_dans_l_ensemble(acc, get_element(it1)))
+			ajouter_etat_final( res, get_element( it1 ) );
+	}
+	// On ajoute les lettres
+	for(
+		it1 = premier_iterateur_ensemble( get_alphabet( automate ) );
+		! iterateur_ensemble_est_vide( it1 );
+		it1 = iterateur_suivant_ensemble( it1 )
+	){
+		ajouter_lettre( res, (char) get_element( it1 ) );
+	}
+	// On ajoute les transitions
+	Table_iterateur it2;
+	for(
+		it2 = premier_iterateur_table( automate->transitions );
+		! iterateur_est_vide( it2 );
+		it2 = iterateur_suivant_table( it2 )
+	){
+		Cle * cle = (Cle*) get_cle( it2 );
+		Ensemble * fins = (Ensemble*) get_valeur( it2 );
+		for(
+			it1 = premier_iterateur_ensemble( fins );
+			! iterateur_ensemble_est_vide( it1 );
+			it1 = iterateur_suivant_ensemble( it1 )
+		){
+			int fin = get_element( it1 );
+			if(est_dans_l_ensemble(acc, cle->origine))
+				ajouter_transition( res, cle->origine, cle->lettre, fin );
+		}
+	}
+	 liberer_ensemble(acc);
+	 return res;
 }
 
 void inverser_transition( int origine, char lettre, int fin, void* data ){
@@ -542,9 +645,90 @@ Automate *miroir( const Automate * automate){
 	return automate_miroir;
 }
 
+
+
 Automate * creer_automate_du_melange(
 	const Automate* automate_1,  const Automate* automate_2
 ){
-	A_FAIRE_RETURN( NULL ); 
+	int taille1 = taille_ensemble(get_etats(automate_1));
+	int taille2 = taille_ensemble(get_etats(automate_2));
+	int tab[taille1*taille2*2];
+	
+	Ensemble_iterateur it1, it2;
+	int i=0;
+	for(
+		it1 = premier_iterateur_ensemble( get_etats( automate_1 ) );
+		! iterateur_ensemble_est_vide( it1 );
+		it1 = iterateur_suivant_ensemble( it1 )
+	){
+		for(
+			it2 = premier_iterateur_ensemble( get_etats( automate_2 ) );
+			! iterateur_ensemble_est_vide( it2 );
+			it2 = iterateur_suivant_ensemble( it2 )
+		){
+			tab[i] = get_element(it1);
+			tab[i+1] = get_element(it2);
+			i += 2;
+		}
+	}
+	
+	Automate * res = creer_automate();
+	pour_tout_element(get_alphabet(automate_1), union_ajouter_lettre, res);
+	pour_tout_element(get_alphabet(automate_2), union_ajouter_lettre, res);
+	for(int i=0; i < taille1*taille2; i++){
+		if(est_un_etat_initial_de_l_automate(automate_1, tab[i*2]) && est_un_etat_initial_de_l_automate(automate_2, tab[i*2+1]))
+			ajouter_etat_initial(res, i);
+		else if(est_un_etat_final_de_l_automate(automate_1, tab[i*2]) && est_un_etat_final_de_l_automate(automate_2, tab[i*2+1]))
+			ajouter_etat_final(res, i);
+		else
+			ajouter_etat(res, i);
+	}
+		
+	Table_iterateur transition;
+	for(
+		transition = premier_iterateur_table( automate_1->transitions );
+		! iterateur_est_vide( transition );
+		transition = iterateur_suivant_table( transition )
+	){
+		Cle * cle = (Cle*) get_cle( transition );
+		Ensemble * fins = (Ensemble*) get_valeur( transition );
+		for(
+			it1 = premier_iterateur_ensemble( fins );
+			! iterateur_ensemble_est_vide( it1 );
+			it1 = iterateur_suivant_ensemble( it1 )
+		){
+			int fin = get_element( it1 );
+			for (int i = 0; i < taille1*taille2; i++){
+				for (int j = 0; j < taille1*taille2; j++){
+					if(tab[i*2] == cle->origine && tab[j*2] == fin && tab[i*2+1] == tab[j*2+1])
+						ajouter_transition( res, i, cle->lettre, j );
+				}
+			}
+		}
+	}
+
+	for(
+		transition = premier_iterateur_table( automate_2->transitions );
+		! iterateur_est_vide( transition );
+		transition = iterateur_suivant_table( transition )
+	){
+		Cle * cle = (Cle*) get_cle( transition );
+		Ensemble * fins = (Ensemble*) get_valeur( transition );
+		for(
+			it1 = premier_iterateur_ensemble( fins );
+			! iterateur_ensemble_est_vide( it1 );
+			it1 = iterateur_suivant_ensemble( it1 )
+		){
+			int fin = get_element( it1 );
+			for (int i = 0; i < taille1*taille2; i++){
+				for (int j = 0; j < taille1*taille2; j++){
+					if(tab[i*2+1] == cle->origine && tab[j*2+1] == fin && tab[i*2] == tab[j*2])
+						ajouter_transition( res, i, cle->lettre, j );
+				}
+			}
+		}
+	}
+	
+	return res;
 }
 
